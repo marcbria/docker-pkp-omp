@@ -1,0 +1,74 @@
+version: "3.5"
+
+networks:
+  inside:
+    external: false
+#  traefik:
+#    external:
+#      name: traefik
+
+
+services:
+  db:
+    image: mariadb:10.2
+    env_file:
+      - .env
+    container_name: ${COMPOSE_PROJECT_NAME:omp}_db
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:root} 
+      MYSQL_DATABASE: ${MYSQL_DATABASE:omp}
+      MYSQL_USER: ${MYSQL_USER:omp}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:omp298}
+    volumes:
+      - ./db:/var/lib/mysql                                          # Stored db data outside docker is recommended.
+      # - ./db/init:/docker-entrypoint-initdb.d                      # Place init .sql file(s) here.
+    networks:
+      - inside
+    restart: always
+  omp:
+    image: marcbria/omp:latest
+    env_file:
+      - .env
+    container_name: ${COMPOSE_PROJECT_NAME:pkp}_omp
+    hostname: ${COMPOSE_PROJECT_NAME:pkp_omp}
+    restart: always
+    ports:
+      - "${HTTP_PORT:8081}:80"
+      - "${HTTPS_PORT:8443}:443"
+  volumes:
+     - /etc/localtime:/etc/localtime             # to sync the container clock with localhost.
+     - ./files/private:/var/www/files            # omp' private files
+     - ./files/public:/var/www/html/public       # omp' public files
+     - ./files/logs:/var/log/apache2             # apache logs
+     - ./config/omp.config.inc.php:/var/www/html/config.inc.php      # omp' config
+     - ./config/apache.htaccess:/var/www/html/.htaccess              # omp' htaccess
+     - ./config/php.custom.ini:/usr/local/etc/php/conf.d/custom.ini  # php config      
+    environment:
+      SERVERNAME: ${PROJECT_DOMAIN:myserver.mydomain}
+      OJS_CLI_INSTALL: 1
+      OJS_DB_HOST: 'db'
+    depends_on: 
+     - db
+    # labels:
+      # - traefik.backend=${COMPOSE_PROJECT_NAME:pkp}_omp
+      # - traefik.frontend.rule=Host:${PROJECT_DOMAIN:myserver.mydomain}
+      # - traefik.docker.network=proxy
+      # - traefik.port=80
+      # - traefik.enable=true
+    networks:
+      - internal
+      # - proxy
+    restart: always
+
+
+# MBR: Why not adding an adminer, commented by default? 
+# Ir really usefull when you need to fix stuff in your omp.
+
+#  adminer:
+#    image: adminer
+#    ports:
+#      - ${ADMINER_HTTP:9085}:8080
+#    networks:
+#      - internal
+#    depends_on:
+#      - db
